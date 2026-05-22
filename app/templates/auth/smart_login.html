@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <h1 class="mb-4 text-center">
+                    <i class="bi bi-wifi" style="font-size: 2rem; color: #0066cc;"></i>
+                    <i class="bi bi-qr-code" style="font-size: 2rem; color: #dc3545;"></i>
+                </h1>
+                <h2 class="mb-4 text-center">Smart Login</h2>
+                
+                <!-- Tab Navigation -->
+                <ul class="nav nav-tabs mb-4" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="nfc-tab" data-bs-toggle="tab" 
+                                data-bs-target="#nfc-content" type="button">
+                            <i class="bi bi-wifi"></i> NFC
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="qr-tab" data-bs-toggle="tab" 
+                                data-bs-target="#qr-content" type="button">
+                            <i class="bi bi-qr-code"></i> QR Code
+                        </button>
+                    </li>
+                </ul>
+                
+                <!-- NFC Tab -->
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="nfc-content" role="tabpanel">
+                        <div class="text-center">
+                            <div id="nfc-status" class="alert alert-info">
+                                <i class="bi bi-hourglass-split"></i> Waiting for NFC tag...
+                            </div>
+                            
+                            <button class="btn btn-primary btn-lg" id="start-nfc">
+                                <i class="bi bi-wifi"></i> Start NFC Reader
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- QR Code Tab -->
+                    <div class="tab-pane fade" id="qr-content" role="tabpanel">
+                        <div class="text-center">
+                            <div id="qr-status" class="alert alert-info">
+                                <i class="bi bi-hourglass-split"></i> Initializing camera...
+                            </div>
+                            
+                            <div id="qr-reader" style="max-width: 100%; display: none;"></div>
+                            
+                            <button class="btn btn-danger btn-lg" id="start-qr" style="display: none;">
+                                <i class="bi bi-camera"></i> Start Camera
+                            </button>
+                            
+                            <button class="btn btn-secondary btn-lg" id="stop-qr" style="display: none;">
+                                <i class="bi bi-stop-circle"></i> Stop Camera
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <hr class="my-4">
+                
+                <p class="text-center text-muted">
+                    Or use <a href="{{ url_for('auth.login') }}">traditional login</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include QR Code Library -->
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.4/minified/html5-qrcode.min.js"></script>
+
+<script>
+let html5QrcodeScanner = null;
+let ndefReader = null;
+
+document.getElementById('start-nfc').addEventListener('click', startNFCReader);
+document.getElementById('start-qr').addEventListener('click', startQRScanner);
+document.getElementById('stop-qr').addEventListener('click', stopQRScanner);
+
+// NFC Implementation
+async function startNFCReader() {
+    if (!('NDEFReader' in window)) {
+        updateNFCStatus('NFC not supported on this device', 'danger');
+        return;
+    }
+    
+    try {
+        ndefReader = new NDEFReader();
+        await ndefReader.scan();
+        
+        updateNFCStatus('Touch NFC tag...', 'warning');
+        
+        ndefReader.addEventListener('reading', async (event) => {
+            const tagId = extractNFCTagId(event);
+            await loginWithTag('nfc', tagId);
+        });
+        
+    } catch (error) {
+        updateNFCStatus('Error: ' + error.message, 'danger');
+    }
+}
+
+function extractNFCTagId(event) {
+    if (event.serialNumber) {
+        return event.serialNumber;
+    }
+    
+    const decoder = new TextDecoder();
+    for (const record of event.message.records) {
+        if (record.recordType === 'text') {
+            return decoder.decode(record.data);
+        }
+    }
+    return 'unknown';
+}
+
+function updateNFCStatus(message, type) {
+    document.getElementById('nfc-status').innerHTML = 
+        '<div class="alert alert-' + type + '"><i class="bi bi-info-circle"></i> ' + 
+        message + '</div>';
+}
+
+// QR Code Implementation
+function startQRScanner() {
+    document.getElementById('qr-reader').style.display = 'block';
+    document.getElementById('start-qr').style.display = 'none';
+    document.getElementById('stop-qr').style.display = 'inline-block';
+    
+    html5QrcodeScanner = new Html5Qrcode("qr-reader");
+    
+    html5QrcodeScanner.start(
+        { facingMode: "environment" },
+        {
+            fps: 10,
+            qrbox: { width: 250, height: 250 }
+        },
+        async (decodedText, decodedResult) => {
+            await loginWithTag('qr', decodedText);
+            stopQRScanner();
+        },
+        (errorMessage) => {
+            // Handle scan errors silently
+        }
+    ).catch(err => {
+        updateQRStatus('Camera error: ' + err.message, 'danger');
+    });
+}
+
+function stopQRScanner() {
+    if (html5QrcodeScanner) {
+        html5QrcodeScanner.stop().then(() => {
+            document.getElementById('qr-reader').style.display = 'none';
+            document.getElementById('start-qr').style.display = 'inline-block';
+            document.getElementById('stop-qr').style.display = 'none';
+        });
+    }
+}
+
+function updateQRStatus(message, type) {
+    document.getElementById('qr-status').innerHTML = 
+        '<div class="alert alert-' + type + '"><i class="bi bi-info-circle"></i> ' + 
+        message + '</div>';
+}
+
+// Combined Login
+async function loginWithTag(scanType, tagId) {
+    try {
+        const response = await fetch('/auth/api/smart-login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                scan_type: scanType,
+                tag_id: tagId
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            if (scanType === 'nfc') {
+                updateNFCStatus('Success! ' + data.message + ' Redirecting...', 'success');
+            } else {
+                updateQRStatus('Success! ' + data.message + ' Redirecting...', 'success');
+            }
+            
+            localStorage.setItem('access_token', data.access_token);
+            setTimeout(() => {
+                window.location.href = "{{ url_for('main.dashboard') }}";
+            }, 1500);
+        } else {
+            const status = scanType === 'nfc' ? 
+                () => updateNFCStatus('Error: ' + data.message, 'danger') :
+                () => updateQRStatus('Error: ' + data.message, 'danger');
+            status();
+        }
+    } catch (error) {
+        if (scanType === 'nfc') {
+            updateNFCStatus('Error: ' + error.message, 'danger');
+        } else {
+            updateQRStatus('Error: ' + error.message, 'danger');
+        }
+    }
+}
+
+// Initialize QR tab UI
+document.getElementById('qr-tab').addEventListener('shown.bs.tab', function () {
+    document.getElementById('start-qr').style.display = 'inline-block';
+    document.getElementById('stop-qr').style.display = 'none';
+    updateQRStatus('Ready to scan QR code', 'info');
+});
+</script>
+{% endblock %}
