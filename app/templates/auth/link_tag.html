@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <h1 class="mb-4">Link Identification Tag to Your Account</h1>
+                
+                <!-- Tab Navigation -->
+                <ul class="nav nav-tabs mb-4" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="nfc-link-tab" data-bs-toggle="tab" 
+                                data-bs-target="#nfc-link-content" type="button">
+                            <i class="bi bi-wifi"></i> NFC Tag
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="qr-link-tab" data-bs-toggle="tab" 
+                                data-bs-target="#qr-link-content" type="button">
+                            <i class="bi bi-qr-code"></i> QR Code
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content">
+                    <!-- NFC Link Tab -->
+                    <div class="tab-pane fade show active" id="nfc-link-content" role="tabpanel">
+                        <form method="POST">
+                            <input type="hidden" name="tag_type" value="nfc">
+                            
+                            <div class="mb-3">
+                                <label for="nfc_tag_id" class="form-label">NFC Tag ID</label>
+                                <input type="text" class="form-control" id="nfc_tag_id" name="tag_id" 
+                                       placeholder="Scan NFC tag or enter ID manually" required>
+                                <small class="form-text text-muted">
+                                    Tap your NFC tag to your device or enter the tag ID
+                                </small>
+                            </div>
+                            
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-secondary" id="scan-nfc-link">
+                                    <i class="bi bi-wifi"></i> Scan Tag
+                                </button>
+                                <button type="submit" class="btn btn-primary">Link NFC Tag</button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <!-- QR Link Tab -->
+                    <div class="tab-pane fade" id="qr-link-content" role="tabpanel">
+                        <form method="POST">
+                            <input type="hidden" name="tag_type" value="qr">
+                            
+                            <div class="mb-3">
+                                <label for="qr_code_id" class="form-label">QR Code ID</label>
+                                <input type="text" class="form-control" id="qr_code_id" name="tag_id" 
+                                       placeholder="Scan QR code or enter ID manually" required>
+                                <small class="form-text text-muted">
+                                    Scan your QR code or enter the code ID
+                                </small>
+                            </div>
+                            
+                            <div id="qr-link-reader" style="max-width: 100%; display: none;"></div>
+                            
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-secondary" id="scan-qr-link">
+                                    <i class="bi bi-camera"></i> Scan QR Code
+                                </button>
+                                <button type="button" class="btn btn-danger" id="stop-qr-link" style="display: none;">
+                                    Stop Camera
+                                </button>
+                                <button type="submit" class="btn btn-primary">Link QR Code</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <hr class="my-4">
+                
+                <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">Back to Dashboard</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include QR Code Library -->
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.4/minified/html5-qrcode.min.js"></script>
+
+<script>
+let ndefReader = null;
+let qrLinkScanner = null;
+
+document.getElementById('scan-nfc-link').addEventListener('click', scanNFCLink);
+document.getElementById('scan-qr-link').addEventListener('click', startQRLinkScan);
+document.getElementById('stop-qr-link').addEventListener('click', stopQRLinkScan);
+
+// NFC Linking
+async function scanNFCLink() {
+    if (!('NDEFReader' in window)) {
+        alert('NFC not supported on this device');
+        return;
+    }
+    
+    try {
+        ndefReader = new NDEFReader();
+        await ndefReader.scan();
+        
+        ndefReader.addEventListener('reading', (event) => {
+            const tagId = extractNFCTagId(event);
+            document.getElementById('nfc_tag_id').value = tagId;
+        });
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+function extractNFCTagId(event) {
+    if (event.serialNumber) {
+        return event.serialNumber;
+    }
+    const decoder = new TextDecoder();
+    for (const record of event.message.records) {
+        if (record.recordType === 'text') {
+            return decoder.decode(record.data);
+        }
+    }
+    return 'unknown';
+}
+
+// QR Linking
+function startQRLinkScan() {
+    document.getElementById('qr-link-reader').style.display = 'block';
+    document.getElementById('scan-qr-link').style.display = 'none';
+    document.getElementById('stop-qr-link').style.display = 'inline-block';
+    
+    qrLinkScanner = new Html5Qrcode("qr-link-reader");
+    
+    qrLinkScanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+            document.getElementById('qr_code_id').value = decodedText;
+            stopQRLinkScan();
+        },
+        (errorMessage) => {}
+    );
+}
+
+function stopQRLinkScan() {
+    if (qrLinkScanner) {
+        qrLinkScanner.stop().then(() => {
+            document.getElementById('qr-link-reader').style.display = 'none';
+            document.getElementById('scan-qr-link').style.display = 'inline-block';
+            document.getElementById('stop-qr-link').style.display = 'none';
+        });
+    }
+}
+</script>
+{% endblock %}
