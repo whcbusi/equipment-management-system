@@ -76,7 +76,9 @@ class Equipment(db.Model):
     name = db.Column(db.String(255), nullable=False)
     serial_number = db.Column(db.String(120), unique=True, nullable=True, index=True)
     barcode = db.Column(db.String(120), unique=True, nullable=True, index=True)
-    qr_code = db.Column(db.String(255), nullable=True)
+    nfc_tag_id = db.Column(db.String(255), unique=True, nullable=True, index=True)  # NEW
+    qr_code_id = db.Column(db.String(255), unique=True, nullable=True, index=True)   # NEW
+    qr_code_image = db.Column(db.String(255), nullable=True)
     status = db.Column(db.Enum(EquipmentStatus), default=EquipmentStatus.AVAILABLE, nullable=False)
     location = db.Column(db.String(255), nullable=True)
     notes = db.Column(db.Text, nullable=True)
@@ -93,6 +95,9 @@ class Equipment(db.Model):
             'name': self.name,
             'serial_number': self.serial_number,
             'barcode': self.barcode,
+            'nfc_tag_id': self.nfc_tag_id,
+            'qr_code_id': self.qr_code_id,
+            'qr_code_image': self.qr_code_image,
             'status': self.status.value,
             'location': self.location,
             'notes': self.notes,
