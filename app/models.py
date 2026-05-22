@@ -21,6 +21,8 @@ class User(db.Model):
     name = db.Column(db.String(120), nullable=False)
     department = db.Column(db.String(120), nullable=True)
     password_hash = db.Column(db.String(255), nullable=False)
+    nfc_tag_id = db.Column(db.String(255), unique=True, nullable=True, index=True)  # NEW
+    qr_code_id = db.Column(db.String(255), unique=True, nullable=True, index=True)   # NEW
     role = db.Column(db.Enum(UserRole), default=UserRole.USER, nullable=False)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -41,6 +43,8 @@ class User(db.Model):
             'name': self.name,
             'department': self.department,
             'role': self.role.value,
+            'nfc_tag_id': self.nfc_tag_id,
+            'qr_code_id': self.qr_code_id,
             'created_at': self.created_at.isoformat()
         }
 
