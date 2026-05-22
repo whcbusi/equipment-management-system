@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="mb-4">
+    <i class="bi bi-wifi"></i> <i class="bi bi-qr-code"></i> Equipment Scanner
+</h1>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body text-center">
+                <h3>Scan Equipment</h3>
+                
+                <!-- Tab Navigation -->
+                <ul class="nav nav-tabs mt-3 mb-3" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="nfc-eq-tab" data-bs-toggle="tab" 
+                                data-bs-target="#nfc-eq-content" type="button">
+                            <i class="bi bi-wifi"></i>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="qr-eq-tab" data-bs-toggle="tab" 
+                                data-bs-target="#qr-eq-content" type="button">
+                            <i class="bi bi-qr-code"></i>
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content">
+                    <!-- NFC Equipment Tab -->
+                    <div class="tab-pane fade show active" id="nfc-eq-content" role="tabpanel">
+                        <div id="nfc-eq-status" class="alert alert-info">
+                            <i class="bi bi-hourglass-split"></i> Waiting for equipment tag...
+                        </div>
+                        
+                        <button class="btn btn-primary btn-lg mt-3" id="start-nfc-eq">
+                            <i class="bi bi-wifi"></i> Start NFC Reader
+                        </button>
+                        
+                        <button class="btn btn-secondary btn-lg mt-3" id="stop-nfc-eq" style="display: none;">
+                            Stop Scanning
+                        </button>
+                    </div>
+                    
+                    <!-- QR Equipment Tab -->
+                    <div class="tab-pane fade" id="qr-eq-content" role="tabpanel">
+                        <div id="qr-eq-status" class="alert alert-info">
+                            <i class="bi bi-hourglass-split"></i> Initializing camera...
+                        </div>
+                        
+                        <div id="qr-eq-reader" style="max-width: 100%; display: none;"></div>
+                        
+                        <button class="btn btn-danger btn-lg mt-3" id="start-qr-eq">
+                            <i class="bi bi-camera"></i> Start Camera
+                        </button>
+                        
+                        <button class="btn btn-secondary btn-lg mt-3" id="stop-qr-eq" style="display: none;">
+                            Stop Camera
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h3>Borrowed Equipment</h3>
+                <div id="scanned-list" class="list-group">
+                    <p class="text-muted">Scan equipment to see details...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include QR Code Library -->
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.4/minified/html5-qrcode.min.js"></script>
+
+<script>
+let ndefReader = null;
+let qrScanner = null;
+
+// Event Listeners
+document.getElementById('start-nfc-eq').addEventListener('click', startNFCEquipmentScan);
+document.getElementById('stop-nfc-eq').addEventListener('click', stopNFCEquipmentScan);
+document.getElementById('start-qr-eq').addEventListener('click', startQREquipmentScan);
+document.getElementById('stop-qr-eq').addEventListener('click', stopQREquipmentScan);
+
+// NFC Equipment Scanning
+async function startNFCEquipmentScan() {
+    if (!('NDEFReader' in window)) {
+        updateNFCEQStatus('NFC not supported', 'danger');
+        return;
+    }
+    
+    try {
+        ndefReader = new NDEFReader();
+        await ndefReader.scan();
+        
+        document.getElementById('start-nfc-eq').style.display = 'none';
+        document.getElementById('stop-nfc-eq').style.display = 'inline-block';
+        updateNFCEQStatus('Ready to scan... Hold equipment near device', 'info');
+        
+        ndefReader.addEventListener('reading', async (event) => {
+            const tagId = extractNFCTagId(event);
+            await scanEquipment('nfc', tagId);
+        });
+    } catch (error) {
+        updateNFCEQStatus('Error: ' + error.message, 'danger');
+    }
+}
+
+function stopNFCEquipmentScan() {
+    if (ndefReader) {
+        ndefReader.abort();
+        ndefReader = null;
+    }
+    document.getElementById('start-nfc-eq').style.display = 'inline-block';
+    document.getElementById('stop-nfc-eq').style.display = 'none';
+    updateNFCEQStatus('Scanning stopped', 'warning');
+}
+
+function extractNFCTagId(event) {
+    if (event.serialNumber) {
+        return event.serialNumber;
+    }
+    const decoder = new TextDecoder();
+    for (const record of event.message.records) {
+        if (record.recordType === 'text') {
+            return decoder.decode(record.data);
+        }
+    }
+    return 'unknown';
+}
+
+function updateNFCEQStatus(message, type) {
+    document.getElementById('nfc-eq-status').innerHTML = 
+        '<div class="alert alert-' + type + '"><i class="bi bi-info-circle"></i> ' + 
+        message + '</div>';
+}
+
+// QR Equipment Scanning
+function startQREquipmentScan() {
+    document.getElementById('qr-eq-reader').style.display = 'block';
+    document.getElementById('start-qr-eq').style.display = 'none';
+    document.getElementById('stop-qr-eq').style.display = 'inline-block';
+    
+    qrScanner = new Html5Qrcode("qr-eq-reader");
+    
+    qrScanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        async (decodedText, decodedResult) => {
+            await scanEquipment('qr', decodedText);
+        },
+        (errorMessage) => {}
+    ).catch(err => {
+        updateQREQStatus('Camera error: ' + err.message, 'danger');
+    });
+}
+
+function stopQREquipmentScan() {
+    if (qrScanner) {
+        qrScanner.stop().then(() => {
+            document.getElementById('qr-eq-reader').style.display = 'none';
+            document.getElementById('start-qr-eq').style.display = 'inline-block';
+            document.getElementById('stop-qr-eq').style.display = 'none';
+        });
+    }
+}
+
+function updateQREQStatus(message, type) {
+    document.getElementById('qr-eq-status').innerHTML = 
+        '<div class="alert alert-' + type + '"><i class="bi bi-info-circle"></i> ' + 
+        message + '</div>';
+}
+
+// Equipment Borrowing
+async function scanEquipment(scanType, tagId) {
+    const statusElement = scanType === 'nfc' ? 'nfc-eq-status' : 'qr-eq-status';
+    const updateStatus = scanType === 'nfc' ? updateNFCEQStatus : updateQREQStatus;
+    
+    updateStatus('Processing...', 'info');
+    
+    try {
+        const response = await fetch('/borrow/api/scan', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+            },
+            body: JSON.stringify({
+                scan_type: scanType,
+                tag_id: tagId
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            updateStatus('Success! ' + data.message, 'success');
+            addToScannedList(data.equipment);
+            
+            setTimeout(() => {
+                updateStatus('Ready for next scan', 'info');
+            }, 2000);
+        } else {
+            updateStatus('Error: ' + data.error, 'danger');
+        }
+    } catch (error) {
+        updateStatus('Error: ' + error.message, 'danger');
+    }
+}
+
+function addToScannedList(equipment) {
+    const list = document.getElementById('scanned-list');
+    const item = document.createElement('div');
+    item.className = 'list-group-item';
+    item.innerHTML = `
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h6 class="mb-0">${equipment.name}</h6>
+                <small class="text-muted">${equipment.equipment_type}</small>
+                <br>
+                <small>Serial: ${equipment.serial_number || 'N/A'}</small>
+            </div>
+            <span class="badge bg-success">Borrowed</span>
+        </div>
+    `;
+    
+    if (list.querySelector('.text-muted')) {
+        list.innerHTML = '';
+    }
+    list.appendChild(item);
+}
+
+// Tab Change Handlers
+document.getElementById('qr-eq-tab').addEventListener('shown.bs.tab', function () {
+    document.getElementById('start-qr-eq').style.display = 'inline-block';
+    document.getElementById('stop-qr-eq').style.display = 'none';
+    updateQREQStatus('Ready to scan QR code', 'info');
+});
+</script>
+{% endblock %}
