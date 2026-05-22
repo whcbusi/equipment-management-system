@@ -1,0 +1,35 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="{{ url_for('main.dashboard') }}">
+            <i class="bi bi-box-seam"></i> Equipment Management
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="scannerDropdown" role="button" data-bs-toggle="dropdown">
+                        <i class="bi bi-wifi"></i> <i class="bi bi-qr-code"></i> Scanner
+                    </a>
+                    <ul class="dropdown-menu" aria-labelledby="scannerDropdown">
+                        <li><a class="dropdown-item" href="{{ url_for('borrow.scanner') }}">
+                            <i class="bi bi-wifi"></i> NFC/QR Scanner
+                        </a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('auth.smart_login') }}">
+                            <i class="bi bi-door-open"></i> Smart Login
+                        </a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('auth.link_tag') }}">
+                            <i class="bi bi-link"></i> Link Tag
+                        </a></li>
+                    </ul>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('equipment.list_equipment') }}">
+                        <i class="bi bi-list"></i> Equipment
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
